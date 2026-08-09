@@ -1,0 +1,38 @@
+{
+  "resource_version": 3,
+  "metadata": {
+    "version": 3,
+    "sources": [
+      {
+        "name": "default",
+        "kind": "postgres",
+        "tables": [
+          { "table": { "schema": "public", "name": "organizations" } },
+          { "table": { "schema": "public", "name": "org_members" } },
+          { "table": { "schema": "public", "name": "workflows" } },
+          { "table": { "schema": "public", "name": "workflow_steps" } },
+          { "table": { "schema": "public", "name": "workflow_runs" } },
+          { "table": { "schema": "public", "name": "step_runs" } }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "name": "triggerWorkflowRun",
+        "definition": {
+          "kind": "synchronous",
+          "handler": "{{ACTION_BASE_URL}}/api/trigger-workflow",
+          "forward_client_headers": true
+        }
+      },
+      {
+        "name": "approveStep",
+        "definition": {
+          "kind": "synchronous",
+          "handler": "{{ACTION_BASE_URL}}/api/approve-step",
+          "forward_client_headers": true
+        }
+      }
+    ]
+  }
+}
