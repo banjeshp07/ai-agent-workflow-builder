@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const workflow_id = body.input?.workflow_id || body.workflow_id || '11111111-1111-1111-1111-111111111111';
 
-    // 1. Fetch Workflow & Org Details (Fixed column names: quota_allowed, quota_used)
+    // 1. Fetch Workflow & Org Details
     const wfQuery = `
       query GetWf($id: uuid!) {
         workflows_by_pk(id: $id) {
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         run_id: '', 
         status: 'FAILED', 
-        message: `GraphQL Query Error: ${JSON.stringify(wfResult.errors)}` 
+        message: `Query Error: ${JSON.stringify(wfResult.errors)}` 
       }, { status: 200 });
     }
 
@@ -58,20 +58,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         run_id: '', 
         status: 'FAILED', 
-        message: `Workflow not found in DB for ID: ${workflow_id}` 
+        message: `Workflow not found for ID: ${workflow_id}` 
       }, { status: 200 });
     }
 
-    // 2. Check Quota Enforcement
-    if (wf.organization && wf.organization.quota_used >= wf.organization.quota_allowed) {
-      return NextResponse.json({ 
-        run_id: '', 
-        status: 'FAILED', 
-        message: 'Organization quota exhausted!' 
-      }, { status: 200 });
-    }
-
-    // 3. Create Workflow Run (RUNNING)
+    // 2. Create Workflow Run (RUNNING)
     const createRunMutation = `
       mutation CreateRun($wf_id: uuid!) {
         insert_workflow_runs_one(object: { workflow_id: $wf_id, status: "RUNNING" }) {
@@ -81,24 +72,18 @@ export async function POST(req: NextRequest) {
     `;
     const runRes = await queryHasura(createRunMutation, { wf_id: workflow_id });
     
+    // Yahan hum exact DB error ko message mein daal rahe hain
     if (runRes?.errors || !runRes?.data?.insert_workflow_runs_one?.id) {
       return NextResponse.json({ 
         run_id: '', 
         status: 'FAILED', 
-        message: `Workflow Run Insert Error: ${JSON.stringify(runRes?.errors || runRes)}` 
+        message: `DB Insert Error: ${JSON.stringify(runRes?.errors || runRes)}` 
       }, { status: 200 });
     }
 
     const runId = runRes.data.insert_workflow_runs_one.id;
-    if (!runId) {
-      return NextResponse.json({ 
-        run_id: '', 
-        status: 'FAILED', 
-        message: 'Failed to obtain run_id from database mutation' 
-      }, { status: 200 });
-    }
 
-    // 4. Step Execution Loop
+    // 3. Step Execution Loop
     let paused = false;
     const steps = wf.workflow_steps || [];
     
@@ -109,25 +94,7 @@ export async function POST(req: NextRequest) {
       let status = 'COMPLETED';
 
       if (step.step_type === 'llm_call') {
-        try {
-          const prompt = step.config?.prompt || 'Summarize agent workflow status.';
-          const geminiApiKey = process.env.GEMINI_API_KEY;
-          if (geminiApiKey) {
-            const llmRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            });
-            output = await llmRes.json();
-          } else {
-            output = { result: `[LLM Response for: "${prompt}"] Agent analyzed data successfully.` };
-          }
-        } catch (err: any) {
-          status = 'FAILED';
-          output = { error: err.message };
-        }
-      } else if (step.step_type === 'http_request') {
-        output = { status_code: 200, response: 'External API endpoint healthy' };
+        output = { result: 'Agent analyzed data successfully.' };
       } else if (step.step_type === 'approval_gate') {
         status = 'PENDING';
         paused = true;
@@ -145,7 +112,7 @@ export async function POST(req: NextRequest) {
       `, { run_id: runId, step_id: step.id, status, output });
     }
 
-    // 5. Update Final Run Status
+    // 4. Update Final Run Status
     const finalStatus = paused ? 'PAUSED' : 'COMPLETED';
     await queryHasura(`
       mutation UpdateRun($id: uuid!, $status: String!) {
@@ -153,7 +120,7 @@ export async function POST(req: NextRequest) {
       }
     `, { id: runId, status: finalStatus });
 
-    // 6. Increment Quota Usage on Completion (Using quota_used)
+    // 5. Increment Quota
     if (!paused && wf.org_id) {
       await queryHasura(`
         mutation IncQuota($org_id: uuid!) {
@@ -172,7 +139,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       run_id: '',
       status: 'FAILED',
-      message: `Server Exception: ${error.message}` 
+      message: `Exception: ${error.message}` 
     }, { status: 200 });
   }
 }
