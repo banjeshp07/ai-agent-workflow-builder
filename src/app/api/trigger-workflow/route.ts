@@ -81,15 +81,15 @@ export async function POST(req: NextRequest) {
     `;
     const runRes = await queryHasura(createRunMutation, { wf_id: workflow_id });
     
-    if (runRes?.errors) {
+    if (runRes?.errors || !runRes?.data?.insert_workflow_runs_one?.id) {
       return NextResponse.json({ 
         run_id: '', 
         status: 'FAILED', 
-        message: `Workflow Run Insert Error: ${JSON.stringify(runRes.errors)}` 
+        message: `Workflow Run Insert Error: ${JSON.stringify(runRes?.errors || runRes)}` 
       }, { status: 200 });
     }
 
-    const runId = runRes?.data?.insert_workflow_runs_one?.id;
+    const runId = runRes.data.insert_workflow_runs_one.id;
     if (!runId) {
       return NextResponse.json({ 
         run_id: '', 
