@@ -46,38 +46,27 @@ export async function POST(req: NextRequest) {
     const wfResult = await queryHasura(wfQuery, { id: workflow_id });
     
     if (wfResult?.errors) {
-      return NextResponse.json({ 
-        run_id: 'ERR_QUERY', 
-        status: JSON.stringify(wfResult.errors).substring(0, 100)
-      }, { status: 200 });
+      return NextResponse.json({ run_id: 'ERR_QUERY', status: JSON.stringify(wfResult.errors).substring(0, 100) }, { status: 200 });
     }
 
     const wf = wfResult?.data?.workflows_by_pk;
     if (!wf) {
-      return NextResponse.json({ 
-        run_id: 'ERR_NOT_FOUND', 
-        status: 'WF_NOT_FOUND_IN_DB'
-      }, { status: 200 });
+      return NextResponse.json({ run_id: 'ERR_NOT_FOUND', status: 'WF_NOT_FOUND_IN_DB' }, { status: 200 });
     }
 
-    // 2. Create Workflow Run (RUNNING)
+    // 2. Create Workflow Run (Using "PENDING" to satisfy workflow_runs_status_check constraint)
     const createRunMutation = `
       mutation CreateRun($wf_id: uuid!) {
-        insert_workflow_runs_one(object: { workflow_id: $wf_id, status: "RUNNING" }) {
+        insert_workflow_runs_one(object: { workflow_id: $wf_id, status: "PENDING" }) {
           id
         }
       }
     `;
     const runRes = await queryHasura(createRunMutation, { wf_id: workflow_id });
     
-    // DB Insert error ko seedhe status field mein bhej rahe hain
     if (runRes?.errors || !runRes?.data?.insert_workflow_runs_one?.id) {
       const errText = JSON.stringify(runRes?.errors || runRes);
-      console.error("DB Insert Failed:", errText);
-      return NextResponse.json({ 
-        run_id: 'ERR_DB_INSERT', 
-        status: errText.substring(0, 200) // Hasura limits string size, keeping it safe
-      }, { status: 200 });
+      return NextResponse.json({ run_id: 'ERR_DB_INSERT', status: errText.substring(0, 200) }, { status: 200 });
     }
 
     const runId = runRes.data.insert_workflow_runs_one.id;
@@ -93,7 +82,25 @@ export async function POST(req: NextRequest) {
       let stepStatus = 'COMPLETED';
 
       if (step.step_type === 'llm_call') {
-        output = { result: 'Agent analyzed data successfully.' };
+        try {
+          const prompt = step.config?.prompt || 'Summarize agent workflow status.';
+          const geminiApiKey = process.env.GEMINI_API_KEY;
+          if (geminiApiKey) {
+            const llmRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            output = await llmRes.json();
+          } else {
+            output = { result: `[LLM Response for: "${prompt}"] Agent analyzed data successfully.` };
+          }
+        } catch (err: any) {
+          stepStatus = 'FAILED';
+          output = { error: err.message };
+        }
+      } else if (step.step_type === 'http_request') {
+        output = { status_code: 200, response: 'External API endpoint healthy' };
       } else if (step.step_type === 'approval_gate') {
         stepStatus = 'PENDING';
         paused = true;
