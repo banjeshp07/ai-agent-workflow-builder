@@ -114,6 +114,13 @@ export async function POST(req: NextRequest) {
         }
       } else if (step.step_type === 'http_request') {
         output = { status_code: 200, response: 'Post-approval HTTP request completed' };
+      } else if (step.step_type === 'conditional_branch') {
+        const conditionMet = true;
+        output = { evaluated_branch: conditionMet ? 'path_a' : 'path_b', status: 'Condition evaluated successfully post-approval' };
+      } else if (step.step_type === 'db_write') {
+        output = { status: 'SUCCESS', message: 'Data successfully written to database post-approval' };
+      } else if (step.step_type === 'notify') {
+        output = { status: 'DISPATCHED', channel: step.config?.channel || 'webhook/slack', message: 'Notification alert sent successfully post-approval' };
       } else if (step.step_type === 'approval_gate') {
         stepStatus = 'PENDING';
         pausedAgain = true;
