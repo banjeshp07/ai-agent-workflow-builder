@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ run_id: 'ERR_NOT_FOUND', status: 'WF_NOT_FOUND_IN_DB' }, { status: 200 });
     }
 
-    // 2. Create Workflow Run (Using "PENDING" to satisfy workflow_runs_status_check constraint)
+    // 2. Create Workflow Run (Using "QUEUED" to satisfy workflow_runs_status_check constraint)
     const createRunMutation = `
       mutation CreateRun($wf_id: uuid!) {
         insert_workflow_runs_one(object: { workflow_id: $wf_id, status: "QUEUED" }) {
