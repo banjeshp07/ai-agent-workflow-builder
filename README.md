@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Agent Workflow Builder
 
-## Getting Started
+A mini n8n purpose-built for chaining AI agent steps, featuring multi-step workflow execution, approval gates, organization quotas, and robust permission gating. Built using Next.js, Hasura GraphQL, PostgreSQL, and Gemini API.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Features & Architecture
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* **Multi-Step Workflow Engine:** Chain various node types including `llm_call` (powered by Google Gemini), `http_request`, and `approval_gate`.
+* **Approval Gates & Pause/Resume:** Workflows automatically pause upon encountering an approval gate (`PAUSED` state) and wait for authorized intervention before resuming execution.
+* **Quota & Rate Limiting Enforcement:** Automatically checks organization usage limits (`quota_used` vs `quota_allowed`) before triggering workflow runs.
+* **Live Dashboard UI:** Clean Next.js dashboard to monitor workflow run statuses (`QUEUED`, `PAUSED`, `COMPLETED`, `FAILED`) in real-time with direct Approve/Reject control actions.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🛠️ Tech Stack
 
-## Learn More
+* **Frontend / API:** Next.js (App Router), React, Tailwind CSS
+* **Database & Backend Engine:** PostgreSQL, Hasura GraphQL Engine
+* **AI Integration:** Google Gemini API (`gemini-1.5-flash`)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## ⚙️ Environment Variables
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Create a `.env.local` file in the root directory with the following configuration:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```env
+NEXT_PUBLIC_HASURA_GRAPHQL_URL=[https://your-hasura-endpoint.hasura.app/v1/graphql](https://your-hasura-endpoint.hasura.app/v1/graphql)
+NEXT_PUBLIC_HASURA_GRAPHQL_ADMIN_SECRET=your_admin_secret
+HASURA_ADMIN_SECRET=your_admin_secret
+GEMINI_API_KEY=your_google_gemini_api_key

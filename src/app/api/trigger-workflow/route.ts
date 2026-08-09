@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
         }
       }
     `;
+    
     const wfResult = await queryHasura(wfQuery, { id: workflow_id });
     
     if (wfResult?.errors) {
@@ -52,6 +53,15 @@ export async function POST(req: NextRequest) {
     const wf = wfResult?.data?.workflows_by_pk;
     if (!wf) {
       return NextResponse.json({ run_id: 'ERR_NOT_FOUND', status: 'WF_NOT_FOUND_IN_DB' }, { status: 200 });
+    }
+
+    // 1.1 Quota & Rate Limiting Verification Check
+    const org = wf.organization;
+    if (org && org.quota_allowed !== null && org.quota_used >= org.quota_allowed) {
+      return NextResponse.json({ 
+        run_id: 'ERR_QUOTA_EXCEEDED', 
+        status: 'FAILED: Organization quota exhausted' 
+      }, { status: 200 });
     }
 
     // 2. Create Workflow Run (Using "QUEUED" to satisfy workflow_runs_status_check constraint)
