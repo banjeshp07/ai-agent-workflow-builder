@@ -18,21 +18,12 @@ export default function WorkflowRunner({
   const [error, setError] = useState<string | null>(null);
 
   const executeGraphQL = async (query: string, variables: any) => {
-    const adminSecret = process.env.NEXT_PUBLIC_HASURA_ADMIN_SECRET;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-    } else if (adminSecret) {
-      headers['x-hasura-admin-secret'] = adminSecret;
-    }
-
-    const res = await fetch(hasuraUrl, {
+    // Hasura ko direct hit karne ke bajaye Next.js proxy route use karein
+    const res = await fetch('/api/graphql', {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ query, variables }),
     });
 
