@@ -47,18 +47,16 @@ export async function POST(req: NextRequest) {
     
     if (wfResult?.errors) {
       return NextResponse.json({ 
-        run_id: '', 
-        status: 'FAILED', 
-        message: `Query Error: ${JSON.stringify(wfResult.errors)}` 
+        run_id: 'ERR_QUERY', 
+        status: JSON.stringify(wfResult.errors).substring(0, 100)
       }, { status: 200 });
     }
 
     const wf = wfResult?.data?.workflows_by_pk;
     if (!wf) {
       return NextResponse.json({ 
-        run_id: '', 
-        status: 'FAILED', 
-        message: `Workflow not found for ID: ${workflow_id}` 
+        run_id: 'ERR_NOT_FOUND', 
+        status: 'WF_NOT_FOUND_IN_DB'
       }, { status: 200 });
     }
 
@@ -72,12 +70,13 @@ export async function POST(req: NextRequest) {
     `;
     const runRes = await queryHasura(createRunMutation, { wf_id: workflow_id });
     
-    // Yahan hum exact DB error ko message mein daal rahe hain
+    // DB Insert error ko seedhe status field mein bhej rahe hain
     if (runRes?.errors || !runRes?.data?.insert_workflow_runs_one?.id) {
+      const errText = JSON.stringify(runRes?.errors || runRes);
+      console.error("DB Insert Failed:", errText);
       return NextResponse.json({ 
-        run_id: '', 
-        status: 'FAILED', 
-        message: `DB Insert Error: ${JSON.stringify(runRes?.errors || runRes)}` 
+        run_id: 'ERR_DB_INSERT', 
+        status: errText.substring(0, 200) // Hasura limits string size, keeping it safe
       }, { status: 200 });
     }
 
@@ -91,12 +90,12 @@ export async function POST(req: NextRequest) {
       if (paused) break;
 
       let output: any = {};
-      let status = 'COMPLETED';
+      let stepStatus = 'COMPLETED';
 
       if (step.step_type === 'llm_call') {
         output = { result: 'Agent analyzed data successfully.' };
       } else if (step.step_type === 'approval_gate') {
-        status = 'PENDING';
+        stepStatus = 'PENDING';
         paused = true;
       }
 
@@ -109,7 +108,7 @@ export async function POST(req: NextRequest) {
             output: $output
           }) { id }
         }
-      `, { run_id: runId, step_id: step.id, status, output });
+      `, { run_id: runId, step_id: step.id, status: stepStatus, output });
     }
 
     // 4. Update Final Run Status
@@ -131,15 +130,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       run_id: String(runId),
-      status: finalStatus,
-      message: paused ? 'Workflow paused at approval gate' : 'Workflow completed successfully'
+      status: finalStatus
     }, { status: 200 });
 
   } catch (error: any) {
     return NextResponse.json({ 
-      run_id: '',
-      status: 'FAILED',
-      message: `Exception: ${error.message}` 
+      run_id: 'ERR_EXCEPTION',
+      status: error.message ? error.message.substring(0, 100) : 'SERVER_ERROR'
     }, { status: 200 });
   }
 }
