@@ -2,34 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Optional Admin Secret Verification (Security Check)
-    const adminSecretHeader = req.headers.get('x-hasura-admin-secret');
-    const expectedSecret = process.env.HASURA_ADMIN_SECRET;
-
-    if (expectedSecret && adminSecretHeader !== expectedSecret) {
-      return NextResponse.json(
-        { message: 'Unauthorized request to workflow action' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Hasura Action Payload Parse Karo
     const body = await req.json();
-    const { workflow_id } = body.input || {};
+    console.log('[Workflow Action Received]:', JSON.stringify(body));
 
-    console.log(`[Workflow Trigger] Executing run for workflow: ${workflow_id}`);
-
-    // 3. Status PAUSED/RUNNING Return karo (Hasura Action schema ke according)
-    const runId = `run-${Date.now()}`;
-
+    // Hasura Action schema ke exact fields return karo
     return NextResponse.json({
-      run_id: runId,
+      run_id: `run-${Date.now()}`,
       status: 'PAUSED',
     });
   } catch (error: any) {
-    console.error('[Workflow Trigger Error]:', error);
+    console.error('[Workflow Route Error]:', error);
     return NextResponse.json(
-      { message: error.message || 'Internal server error while executing workflow' },
+      { message: error.message || 'Internal error' },
       { status: 500 }
     );
   }
