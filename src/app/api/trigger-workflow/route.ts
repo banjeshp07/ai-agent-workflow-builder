@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
     const workflow_id = body.input?.workflow_id || body.workflow_id;
     const userId = req.headers.get('x-hasura-user-id') || 'user-owner-a';
 
+    if (!workflow_id) {
+      return NextResponse.json({ message: 'workflow_id is required', run_id: '', status: 'FAILED' }, { status: 400 });
+    }
+
     // 1. Fetch Workflow & Org Details
     const wfQuery = `
       query GetWf($id: uuid!) {
@@ -44,12 +48,12 @@ export async function POST(req: NextRequest) {
     const wf = wfResult?.data?.workflows_by_pk;
 
     if (!wf) {
-      return NextResponse.json({ message: 'Workflow not found' }, { status: 404 });
+      return NextResponse.json({ message: 'Workflow not found', run_id: '', status: 'FAILED' }, { status: 404 });
     }
 
     // 2. Check Quota Enforcement
     if (wf.organization.calls_used >= wf.organization.calls_allowed) {
-      return NextResponse.json({ message: 'Organization quota exhausted!' }, { status: 429 });
+      return NextResponse.json({ message: 'Organization quota exhausted!', run_id: '', status: 'FAILED' }, { status: 429 });
     }
 
     // 3. Create Workflow Run (RUNNING)
@@ -63,6 +67,10 @@ export async function POST(req: NextRequest) {
     const runRes = await queryHasura(createRunMutation, { wf_id: workflow_id });
     const runId = runRes?.data?.insert_workflow_runs_one?.id;
 
+    if (!runId) {
+      return NextResponse.json({ message: 'Failed to create workflow run', run_id: '', status: 'FAILED' }, { status: 500 });
+    }
+
     // 4. Step Execution Loop
     let paused = false;
     for (const step of wf.workflow_steps) {
@@ -72,7 +80,6 @@ export async function POST(req: NextRequest) {
       let status = 'COMPLETED';
 
       if (step.step_type === 'llm_call') {
-        // Real LLM Call using Gemini API / Stubbed Retry
         try {
           const prompt = step.config?.prompt || 'Summarize agent workflow status.';
           const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -121,19 +128,24 @@ export async function POST(req: NextRequest) {
     // 6. Increment Quota Usage on Completion
     if (!paused) {
       await queryHasura(`
-        mutation IncQuota($org_id: uuid!, $used: int!) {
+        mutation IncQuota($org_id: uuid!) {
           update_organizations_by_pk(pk_columns: { id: $org_id }, _inc: { calls_used: 1 }) { id }
         }
-      `, { org_id: wf.org_id, used: wf.organization.calls_used + 1 });
+      `, { org_id: wf.org_id });
     }
 
+    // Always ensure run_id & status are present for Hasura Action schema
     return NextResponse.json({
-      run_id: runId,
+      run_id: String(runId),
       status: finalStatus,
       message: paused ? 'Workflow paused at approval gate' : 'Workflow completed successfully'
     });
 
   } catch (error: any) {
-    return NextResponse.json({ message: error.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({ 
+      run_id: '',
+      status: 'FAILED',
+      message: error.message || 'Server error' 
+    }, { status: 500 });
   }
 }
