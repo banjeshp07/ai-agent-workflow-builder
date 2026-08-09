@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     // 2. Create Workflow Run (Using "PENDING" to satisfy workflow_runs_status_check constraint)
     const createRunMutation = `
       mutation CreateRun($wf_id: uuid!) {
-        insert_workflow_runs_one(object: { workflow_id: $wf_id, status: "PENDING" }) {
+        insert_workflow_runs_one(object: { workflow_id: $wf_id, status: "QUEUED" }) {
           id
         }
       }
