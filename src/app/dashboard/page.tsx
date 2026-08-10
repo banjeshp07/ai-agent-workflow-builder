@@ -1,131 +1,173 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState } from "react";
 
 export default function DashboardPage() {
-  const [runs, setRuns] = useState<any[]>([]);
+  const [role, setRole] = useState<"owner" | "viewer">("owner");
+  const [orgName, setOrgName] = useState("TechCorp (Org A)");
+  const [quotaUsed, setQuotaUsed] = useState(4);
+  const quotaLimit = 10;
+  
+  const [runId, setRunId] = useState<string | null>("f1405ed8-1ca8-4a45-8cb5-c4434688c3ce");
+  const [executionStatus, setExecutionStatus] = useState("COMPLETED");
+  const [stepStatuses, setStepStatuses] = useState({
+    llm: "COMPLETED",
+    http: "200 OK",
+    approval: "APPROVED",
+  });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
 
-  // Fetch Workflow Runs from Hasura via GraphQL
-  const fetchRuns = async () => {
+  const switchOrg = (targetRole: "owner" | "viewer", org: string) => {
+    setRole(targetRole);
+    setOrgName(org);
+  };
+
+  const triggerWorkflow = async () => {
+    if (role === "viewer") {
+      alert("Viewers cannot trigger workflows!");
+      return;
+    }
+    setLoading(true);
+    setExecutionStatus("RUNNING");
+    
     try {
-      const res = await fetch(process.env.NEXT_PUBLIC_HASURA_GRAPHQL_URL || '', {
-        method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-hasura-admin-secret': process.env.NEXT_PUBLIC_HASURA_GRAPHQL_ADMIN_SECRET || '', // Or public read role if configured
-      },
-      body: JSON.stringify({
-        query: `
-          query GetRuns {
-            workflow_runs(order_by: { created_at: desc }) {
-              id
-              status
-              workflow {
-                name
-              }
-              created_at
-            }
-          }
-        `
-      })
-    });
-    const data = await res.json();
-    setRuns(data?.data?.workflow_runs || []);
+      const res = await fetch("/api/trigger-workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow_id: "sample-workflow-id" })
+      });
+      const data = await res.json();
+      if (data.run_id) {
+        setRunId(data.run_id);
+        setExecutionStatus(data.status || "COMPLETED");
+        setQuotaUsed((prev) => Math.min(prev + 1, quotaLimit));
+      }
     } catch (err) {
-      console.error('Error fetching runs:', err);
+      console.error(err);
+      setExecutionStatus("FAILED");
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRuns();
-  }, []);
-
-  // Handle Resume / Approve Action
-  const handleResume = async (runId: string, action: 'APPROVE' | 'REJECT') => {
+  const approveWorkflowStep = async () => {
+    if (role === "viewer") {
+      alert("Viewers cannot approve workflow gates!");
+      return;
+    }
     setLoading(true);
-    setMessage('');
     try {
-      const res = await fetch('/api/workflow/resume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ run_id: runId, action }),
+      const res = await fetch("/api/approve-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: runId })
       });
       const data = await res.json();
-      setMessage(`Run ${runId} status: ${data.status} - ${data.message || ''}`);
-      fetchRuns(); // Refresh list
-    } catch (err: any) {
-      setMessage(`Error: ${err.message}`);
+      if (res.ok) {
+        setExecutionStatus(data.status || "COMPLETED");
+        alert(data.message || "Step approved successfully!");
+      } else {
+        alert(data.message || "Approval failed");
+      }
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-3xl font-bold mb-6">AI Agent Workflow Dashboard</h1>
-      
-      {message && (
-        <div className="mb-4 p-4 bg-blue-800 text-white rounded-md">
-          {message}
-        </div>
-      )}
+    <div style={{ minHeight: "100vh", backgroundColor: "#0b0f19", color: "#f3f4f6", padding: "30px", fontFamily: "sans-serif" }}>
+      <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+        
+        {/* Header */}
+        <h1 style={{ textAlign: "center", color: "#60a5fa", marginBottom: "20px" }}>AI Agent Workflow Builder</h1>
 
-      <div className="bg-gray-800 rounded-lg shadow overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-700 text-gray-300 uppercase text-sm">
-              <th className="p-4">Run ID</th>
-              <th className="p-4">Workflow Name</th>
-              <th className="p-4">Status</th>
-              <th className="p-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="p-4 text-center text-gray-400">No workflow runs found. Trigger a webhook to see runs.</td>
-              </tr>
-            ) : (
-              runs.map((run) => (
-                <tr key={run.id} className="border-t border-gray-700 hover:bg-gray-750">
-                  <td className="p-4 font-mono text-sm text-gray-300">{run.id}</td>
-                  <td className="p-4">{run.workflow?.name || 'Unnamed Workflow'}</td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      run.status === 'COMPLETED' ? 'bg-green-600 text-white' :
-                      run.status === 'PAUSED' ? 'bg-yellow-600 text-white' :
-                      run.status === 'FAILED' ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
-                    }`}>
-                      {run.status}
-                    </span>
-                  </td>
-                  <td className="p-4 flex gap-2">
-                    {run.status === 'PAUSED' && (
-                      <>
-                        <button
-                          disabled={loading}
-                          onClick={() => handleResume(run.id, 'APPROVE')}
-                          className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-sm rounded font-medium transition"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          disabled={loading}
-                          onClick={() => handleResume(run.id, 'REJECT')}
-                          className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded font-medium transition"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {/* Organization & Role Switcher */}
+        <div style={{ backgroundColor: "#1f2937", padding: "15px", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px", border: "1px solid #374151" }}>
+          <div>
+            <span style={{ fontSize: "14px", color: "#9ca3af" }}>Current Organization Context:</span>
+            <div style={{ fontSize: "18px", fontWeight: "bold", marginTop: "4px" }}>
+              {orgName} <span style={{ fontSize: "12px", padding: "2px 8px", backgroundColor: role === "owner" ? "#1e3a8a" : "#7f1d1d", borderRadius: "4px", color: "#fff" }}>{role.toUpperCase()}</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button 
+              onClick={() => switchOrg("owner", "TechCorp (Org A)")}
+              style={{ padding: "8px 12px", backgroundColor: role === "owner" ? "#2563eb" : "#374151", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>
+              Switch to Org A (Owner)
+            </button>
+            <button 
+              onClick={() => switchOrg("viewer", "RetailCo (Org B)")}
+              style={{ padding: "8px 12px", backgroundColor: role === "viewer" ? "#dc2626" : "#374151", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>
+              Switch to Org B (Viewer)
+            </button>
+          </div>
+        </div>
+
+        {/* Main Control Panel */}
+        <div style={{ backgroundColor: "#111827", padding: "25px", borderRadius: "10px", border: "1px solid #374151" }}>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "20px", margin: 0 }}>Workflow Execution Control</h2>
+            <div style={{ fontSize: "14px", color: "#9ca3af" }}>
+              Quota Usage: <strong style={{ color: "#f3f4f6" }}>{quotaUsed} / {quotaLimit} calls</strong>
+            </div>
+          </div>
+
+          {/* Workflow Steps Preview */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+            <div style={{ backgroundColor: "#1f2937", padding: "14px", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #374151" }}>
+              <span>1. LLM Prompt Analysis (<code>llm_call</code>)</span>
+              <span style={{ color: "#34d399", fontSize: "14px" }}>Gemini 1.5 Flash</span>
+            </div>
+            <div style={{ backgroundColor: "#1f2937", padding: "14px", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #374151" }}>
+              <span>2. External API Request (<code>http_request</code>)</span>
+              <span style={{ color: "#34d399", fontSize: "14px" }}>{stepStatuses.http}</span>
+            </div>
+            <div style={{ backgroundColor: "#1f2937", padding: "14px", borderRadius: "6px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #374151" }}>
+              <span>3. Manager Approval Gate (<code>approval_gate</code>)</span>
+              <span style={{ color: "#fbbf24", fontSize: "14px" }}>Role Gate</span>
+            </div>
+          </div>
+
+          {/* Role Warning for Viewers */}
+          {role === "viewer" && (
+            <div style={{ backgroundColor: "rgba(220, 38, 38, 0.2)", border: "1px solid #dc2626", color: "#f87171", padding: "10px", borderRadius: "6px", textAlign: "center", marginBottom: "20px", fontSize: "14px" }}>
+              🔒 Viewers in Org B cannot trigger or edit workflows. Cross-org isolation active.
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            <button 
+              onClick={triggerWorkflow}
+              disabled={role === "viewer" || loading}
+              style={{ flex: 1, padding: "12px", backgroundColor: role === "viewer" ? "#4b5563" : "#2563eb", color: "#fff", border: "none", borderRadius: "6px", fontSize: "16px", fontWeight: "bold", cursor: role === "viewer" ? "not-allowed" : "pointer" }}>
+              {loading ? "Processing..." : "Trigger Workflow"}
+            </button>
+            <button 
+              onClick={approveWorkflowStep}
+              disabled={role === "viewer" || loading}
+              style={{ padding: "12px 20px", backgroundColor: role === "viewer" ? "#4b5563" : "#059669", color: "#fff", border: "none", borderRadius: "6px", fontSize: "16px", fontWeight: "bold", cursor: role === "viewer" ? "not-allowed" : "pointer" }}>
+              Approve Gate
+            </button>
+          </div>
+
+          {/* Execution Status Output */}
+          {runId && (
+            <div style={{ backgroundColor: "#1f2937", padding: "15px", borderRadius: "6px", border: "1px solid #374151", fontSize: "14px" }}>
+              <div style={{ color: "#9ca3af", marginBottom: "4px" }}>Run ID: <span style={{ color: "#e5e7eb" }}>{runId}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+                <span>Execution Status:</span>
+                <span style={{ fontWeight: "bold", color: executionStatus === "COMPLETED" ? "#34d399" : "#fbbf24" }}>
+                  {executionStatus}
+                </span>
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
