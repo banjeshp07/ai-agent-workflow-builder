@@ -14,7 +14,6 @@ export default function AdvancedWorkflowBuilder() {
   const [quotaUsed, setQuotaUsed] = useState(4);
   const quotaLimit = 10;
 
-  // Workflow Builder State
   const [workflowName, setWorkflowName] = useState("Automated Customer Support Flow");
   const [triggerType, setTriggerType] = useState<"manual" | "webhook" | "scheduled" | "database_event">("manual");
   const [steps, setSteps] = useState<WorkflowStep[]>([
@@ -23,7 +22,6 @@ export default function AdvancedWorkflowBuilder() {
     { id: "3", type: "approval_gate", config: "Manager Approval for Refund > 5000" },
   ]);
 
-  // Execution State
   const [runId, setRunId] = useState<string | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string>("IDLE");
   const [loading, setLoading] = useState(false);
@@ -116,7 +114,6 @@ export default function AdvancedWorkflowBuilder() {
     <div style={{ minHeight: "100vh", backgroundColor: "#0b0f19", color: "#f3f4f6", padding: "30px", fontFamily: "sans-serif" }}>
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         
-        {/* Header & Org Context Switcher */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px", borderBottom: "1px solid #1f2937", paddingBottom: "15px" }}>
           <div>
             <h1 style={{ fontSize: "24px", color: "#60a5fa", margin: 0 }}>AI Agent Workflow Builder</h1>
@@ -141,7 +138,6 @@ export default function AdvancedWorkflowBuilder() {
           </div>
         </div>
 
-        {/* Top Status Bar */}
         <div style={{ backgroundColor: "#111827", padding: "15px 20px", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", border: "1px solid #374151" }}>
           <div>
             <span style={{ fontSize: "12px", color: "#9ca3af" }}>Active Context:</span>
@@ -157,7 +153,6 @@ export default function AdvancedWorkflowBuilder() {
           </div>
         </div>
 
-        {/* Workflow Setup & Builder Section */}
         <div style={{ backgroundColor: "#111827", padding: "20px", borderRadius: "8px", border: "1px solid #374151", marginBottom: "20px" }}>
           <h2 style={{ fontSize: "18px", marginTop: 0, marginBottom: "15px" }}>Workflow Configuration</h2>
           
@@ -208,7 +203,6 @@ export default function AdvancedWorkflowBuilder() {
             ))}
           </div>
 
-          {/* Add Step Buttons */}
           {role !== "viewer" && (
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button onClick={() => addStep("llm_call")} style={{ background: "#374151", color: "#60a5fa", border: "1px solid #4b5563", padding: "6px 10px", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>+ Add llm_call</button>
@@ -220,7 +214,6 @@ export default function AdvancedWorkflowBuilder() {
           )}
         </div>
 
-        {/* Execution & Run Controls */}
         <div style={{ backgroundColor: "#111827", padding: "20px", borderRadius: "8px", border: "1px solid #374151" }}>
           <h2 style={{ fontSize: "18px", marginTop: 0, marginBottom: "15px" }}>Live Run & Subscription Simulation</h2>
 
