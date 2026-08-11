@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'run_id and action (APPROVE/REJECT) are required' }, { status: 400 });
     }
 
-    // 1. Fetch Workflow Run Details & Workflow ID
     const runQuery = `
       query GetRun($id: uuid!) {
         workflow_runs_by_pk(id: $id) {
@@ -59,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'REJECT') {
-      // Agar user ne reject kar diya, toh run ko FAILED mark kar do
+
       await queryHasura(`
         mutation UpdateRunFailed($id: uuid!) {
           update_workflow_runs_by_pk(pk_columns: { id: $id }, _set: { status: "FAILED" }) { id }
@@ -69,10 +68,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ run_id, status: 'FAILED', message: 'Workflow rejected by user.' }, { status: 200 });
     }
 
-    // 2. Agar APPROVE kiya hai, toh approval gate ke baad ke steps execute karo
     const steps = runData.workflow.workflow_steps || [];
     
-    // Pehle wale executed steps pata lagayein taaki unke aage ke steps run ho sakein
     const existingStepsRes = await queryHasura(`
       query GetStepRuns($run_id: uuid!) {
         step_runs(where: { workflow_run_id: { _eq: $run_id } }) {
@@ -87,7 +84,6 @@ export async function POST(req: NextRequest) {
     let finalStatus = 'COMPLETED';
 
     for (const step of steps) {
-      // Agar ye step pehle run ho chuka hai, toh skip karein
       if (executedStepIds.has(step.id)) continue;
 
       let output: any = {};
@@ -127,7 +123,6 @@ export async function POST(req: NextRequest) {
         finalStatus = 'PAUSED';
       }
 
-      // Step run record insert karein
       await queryHasura(`
         mutation CreateStepRun($run_id: uuid!, $step_id: uuid!, $status: String!, $output: jsonb) {
           insert_step_runs_one(object: {
@@ -142,14 +137,12 @@ export async function POST(req: NextRequest) {
       if (pausedAgain || stepStatus === 'FAILED') break;
     }
 
-    // 3. Workflow Run status update karein
     await queryHasura(`
       mutation UpdateRunStatus($id: uuid!, $status: String!) {
         update_workflow_runs_by_pk(pk_columns: { id: $id }, _set: { status: $status }) { id }
       }
     `, { id: run_id, status: finalStatus });
 
-    // 4. Agar successfully complete ho gaya, toh quota increment karein
     if (finalStatus === 'COMPLETED' && runData.workflow.org_id) {
       await queryHasura(`
         mutation IncQuota($org_id: uuid!) {
